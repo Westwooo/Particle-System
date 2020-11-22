@@ -12,7 +12,10 @@
 #define DEG_TO_RAD 0.017453293
 #define MAX_PARTICLES 10000
 #define EMMITTER_SIZE 10
+#define SNOW 1
 #define SNOW_SIZE 1
+#define RAIN 2
+#define RAIN_SIZE 0.7
 
 #define KEYS 4
 #define W 0
@@ -32,42 +35,79 @@ GLint width = 1400, height = 1000;      /* size of window           */
 GLint falling = false;		    //play and pause simulation
 GLint WALKING = 0;	    	    /* Representing the walking state */
 GLint state = 0;
+bool snowing = false;
+bool raining = false;
 GLfloat initHeight = 4;
 GLfloat snowVel = 0.01;
-
-//////////////////////////////////////////////
-struct snowflake {
-
-    GLfloat height = initHeight + (4 * (float)rand()/RAND_MAX);
-    GLfloat xCoord = EMMITTER_SIZE * ( (float)rand()/RAND_MAX - 2 * ((float)rand()/RAND_MAX));
-    GLfloat zCoord = EMMITTER_SIZE * ((float)rand() / RAND_MAX - 2 * ((float)rand() / RAND_MAX));
-    GLdouble size = SNOW_SIZE;
-    GLfloat velocity = snowVel;
-};
-
-struct raindrop {
-    //GLfloat life = ;
-};
-
-struct snowflake pSystem[MAX_PARTICLES];
-
-GLfloat white_light[] = { 1.0, 1.0, 1.0, 1.0 };
-GLfloat light_position0[] = { -5.0, 7.0, -5.0, 0.0 };
-GLfloat matSpecular[] = { 1.0, 1.0, 1.0, 1.0 };
-GLfloat matShininess[] = { 50.0 };
-GLfloat matSurface[] = { 0.8, 0.5, 0.2, 0.1 };
-GLfloat matEmissive[] = { 0.0, 1.0, 0.0, 0.1 };
+GLfloat rainVel = 0.01;
+GLfloat gravity = 0.001;
 
 //////////////////////////////////////////////
 
-void drawSnow(snowflake snow) {
-    //draw a stationary snow particle
+struct particle {
+    GLfloat timeToLive;
+    GLint type;
+    GLfloat x;
+    GLfloat y;
+    GLfloat z;
+    GLdouble size;
+    GLfloat vel;
+    GLfloat acc;
+};
+
+struct particle pSystem[MAX_PARTICLES];
+
+/* 
+Create a snowflake that falls at a constant speed that is relative to its size.
+On reaching the floor it begins to melt in time set by the user
+*/
+void initSnow(int i) {
+    pSystem[i].timeToLive = 1;
+    pSystem[i].type = SNOW;
+    pSystem[i].y = initHeight + (4 * (float)rand() / RAND_MAX);
+    pSystem[i].x = EMMITTER_SIZE * ((float)rand() / RAND_MAX - 2 * ((float)rand() / RAND_MAX));
+    pSystem[i].z = EMMITTER_SIZE * ((float)rand() / RAND_MAX - 2 * ((float)rand() / RAND_MAX));
+    pSystem[i].size = SNOW_SIZE * (1 + (float)rand()/RAND_MAX);
+    pSystem[i].vel = snowVel;
+    pSystem[i].acc = gravity/100;
+}
+
+//Draw a snow particle
+void drawSnow(particle snow) {
     glDisable(GL_LIGHTING);
     glEnable(GL_POINT_SMOOTH);
     glPointSize(snow.size);
     glColor3f(1, 1, 1);
     glBegin(GL_POINTS);
-    glVertex3f(snow.xCoord, snow.height, snow.zCoord);
+    glVertex3f(snow.x, snow.y, snow.z);
+    glEnd();
+    glEnable(GL_LIGHTING);
+}
+
+/*
+Create a raindrop that falls with constant acceleration due to gravity
+And has a random starting velocity based on its size
+*/
+void initRain(int i) {
+    pSystem[i].timeToLive = 0.01;
+    pSystem[i].type = RAIN;
+    pSystem[i].y = initHeight + (4 * (float)rand() / RAND_MAX);
+    pSystem[i].x = EMMITTER_SIZE * ((float)rand() / RAND_MAX - 2 * ((float)rand() / RAND_MAX));
+    pSystem[i].z = EMMITTER_SIZE * ((float)rand() / RAND_MAX - 2 * ((float)rand() / RAND_MAX));
+    pSystem[i].size = RAIN_SIZE * (1 + (float)rand() / RAND_MAX);
+    pSystem[i].vel = rainVel;
+    pSystem[i].acc = gravity;
+}
+GLfloat white_light[] = { 1.0, 1.0, 1.0, 1.0 };
+
+void drawRain(particle rain) {
+    glDisable(GL_LIGHTING);
+    //glEnable(GL_POINT_SMOOTH);
+    glPointSize(rain.size);
+    glColor3f(0, 0, 1);
+    glBegin(GL_LINES);
+        glVertex3f(rain.x, rain.y + (rain.vel - rain.acc), rain.z);
+        glVertex3f(rain.x, rain.y, rain.z);
     glEnd();
     glEnable(GL_LIGHTING);
 }
@@ -79,9 +119,6 @@ void draw_scene(void) {
 
     /* Draw ground */
     glDisable(GL_LIGHTING);
-    // The ground quad and the grid lines are co-planar, which would lead to horrible Z-fighting,
-    // so we resort to 2 hacks. First, fiddle with the Z-buffer depth range, using glDepthRange(),
-    // and second, draw the lines 0.01 higher in Y than the ground plane
     glDepthRange(0.1, 1.0);
     glColor3f(0.4, 0.4, 0.4);
     glBegin(GL_QUADS);
@@ -107,47 +144,42 @@ void draw_scene(void) {
 
     glEnable(GL_LIGHTING);
 
-    //Draw a snow particle
     for (int i = 0; i < MAX_PARTICLES; i++) {
-        drawSnow(pSystem[i]);
+        if (pSystem[i].type == SNOW)
+            drawSnow(pSystem[i]);
+        else
+            drawRain(pSystem[i]);
     }
 } // draw_scene()
 
-//////////////////////////////////////////////
+void calculate_lookpoint(void) { 
 
-void calculate_lookpoint(void) { /* Given an eyepoint and latitude and longitude angles, will
-     compute a look point one unit away */
-
-     /* To be completed */
     centerx = eyex + (cos((mlat + lat) * DEG_TO_RAD) * sin((mlon + lon) * DEG_TO_RAD));
     centery = eyey + sin((mlat + lat) * DEG_TO_RAD);
     centerz = eyez + (cos((mlat + lat) * DEG_TO_RAD) * cos((mlon + lon) * DEG_TO_RAD));
 
 } // calculate_lookpoint()
 
-//Called by OpenGl to update the display
+//Display functoin 
 void display(void) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //Flush the frame and depth buffer to update window
     glLoadIdentity(); //reset the matrix to defualt
-    calculate_lookpoint(); /* Compute the centre of interest   */
+    calculate_lookpoint(); 
     gluLookAt(eyex, eyey, eyez, centerx, centery, centerz, upx, upy, upz);
-    //glLightfv(GL_LIGHT0, GL_POSITION, light_position0);
     draw_scene();
     glutSwapBuffers();
 } // display()
 
-//Called by OpenGl when the window is moved/reshaped
+//Reshape function 
 void reshape(int w, int h) {
     glViewport(0, 0, (GLsizei)w, (GLsizei)h);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     gluPerspective(50, (GLfloat)w / (GLfloat)h, 0.1, 80.0);
     glMatrixMode(GL_MODELVIEW);
-    width = w;   /* Record the new width and height */
+    width = w; 
     height = h;
-} //reshape()
-
-//////////////////////////////////////////////
+}
 
 void mouse_motion(int x, int y) {
     lookX += (x - width/2);
@@ -164,8 +196,6 @@ void mouse_motion(int x, int y) {
   
 } // mouse_motion()
 
-//////////////////////////////////////////////
-
 void keyboardDown(unsigned char key, int x, int y) {
     switch (key) {
     case 27:  /* Escape key */
@@ -173,6 +203,14 @@ void keyboardDown(unsigned char key, int x, int y) {
         break;
     case 32: /* space bar */
         falling = !falling;
+        break;
+    case 49: /* 1 key */
+        snowing = true;
+        raining = false;
+        break;
+    case 50: /* 2 key */
+        raining = true;
+        snowing = false;
         break;
     case 119: /*w key*/
         keystates[W] = true;
@@ -187,9 +225,7 @@ void keyboardDown(unsigned char key, int x, int y) {
         keystates[D] = true;
         break;
     }
-} // keyboard()
-
-//////////////////////////////////////////////
+} // keyboardDown()
 
 void keyboardUp(unsigned char key, int x, int y) {
     switch (key) {
@@ -206,7 +242,7 @@ void keyboardUp(unsigned char key, int x, int y) {
         keystates[D] = false;
         break;
     }
-} // keyboard()
+} // keyboardUp()
 
 //////////////////////////////////////////////
 
@@ -236,10 +272,9 @@ void init(void) {
     glEnable(GL_NORMALIZE);
 
     //Create a snowflake 
-    for (int i = 0; i < MAX_PARTICLES; i++) {
-        struct snowflake snow;
-        pSystem[i] = snow;
-    }
+    //for (int i = 0; i < MAX_PARTICLES; i++) {
+        //initSnow(i);
+    //}
     
     //set the keystates to false
     for (int i = 0; i < KEYS; i++) {
@@ -252,9 +287,22 @@ void idle(void) {
     //Have logic calculating falling speed of snow flake
     for (int i = 0; i < MAX_PARTICLES; i++) {
         if (falling) {
-            if (pSystem[i].height <= 0.02)
-                pSystem[i].height = 0.02;//initHeight;
-            pSystem[i].height -= 0.01;  
+            if (pSystem[i].timeToLive > 0) {
+                if (pSystem[i].y > 0.02) {
+                    pSystem[i].y -= pSystem[i].vel;
+                    pSystem[i].vel += pSystem[i].acc;
+                }
+                else {
+                    pSystem[i].timeToLive -= 0.01;
+                    pSystem[i].size *= pSystem[i].timeToLive;
+                }
+            }
+            else {
+                if (snowing)
+                    initSnow(i);
+                if (raining)
+                    initRain(i);
+            }
         }
     }
     if (keystates[W]) {
