@@ -1,0 +1,12 @@
+#version 410 core
+layout(location = 0) in vec3 start;
+
+uniform mat4 view;
+uniform mat4 projection;
+uniform vec3 position;
+//uniform vec2 vel;
+
+void main()
+{
+	gl_Position = projection *  view * vec4(position, 1.0);
+}

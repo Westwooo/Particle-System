@@ -1,0 +1,13 @@
+#version 410 core
+
+out vec4 FragColor;
+
+flat in uint fMode;
+
+void main()
+{
+	if(fMode == 0)
+		FragColor = vec4(0.4, 0.4, 0.4, 1.0);
+	else
+		FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+}

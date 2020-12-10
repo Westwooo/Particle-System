@@ -1,0 +1,21 @@
+#version 410 core
+layout(location = 0) in vec3 aPos;
+
+uniform mat4 view;
+uniform mat4 projection;
+uniform int mode;
+uniform float x;
+uniform float z;
+
+flat out uint fMode;
+
+void main()
+{
+	fMode = mode;
+	if (mode == 0)
+		gl_Position = projection * view * vec4(aPos, 1.0);
+	else if (mode == 1)
+		gl_Position = projection * view * vec4(x, 0.01, aPos.z , 1.0);
+	else if (mode == 2)
+		gl_Position = projection * view * vec4(aPos.x, 0.01, z , 1.0);	
+}
